@@ -27,6 +27,8 @@
  */
 uint8_t intersection[4];
 pthread_mutex_t mutex[4];
+pthread_mutex_t fin;
+pthread_cond_t cond[4];
 
 bool *done;
 
@@ -47,6 +49,9 @@ void* lane_fn(void *arg)
 
                 printf("Car %d entering intersection (%d)\n", id, req1);
 
+                pthread_mutex_lock(&mutex[req1]);
+                pthread_mutex_lock(&mutex[req2]);
+
                 printf("Car %d in intersection (%d and %d)\n", id, req1, req2);
 
                 /* Collision detection; non-zero implies already claimed. */
@@ -58,12 +63,9 @@ void* lane_fn(void *arg)
                         printf("%d crashed into %d!\n", id, intersection[req2]);
                 }
 
-
-		
                 /* Actually enter intersection. */
                 intersection[req1] = id;
                 intersection[req2] = id;
-
 
                 /* Spend a bit of time in intersection. */
                 usleep(FACTOR);
@@ -73,8 +75,15 @@ void* lane_fn(void *arg)
                 /* Leave intersection. */
                 intersection[req1] = 0;
                 intersection[req2] = 0;
-        } while (!*done);
 
+                pthread_mutex_unlock(&mutex[req2]);
+                // pthread_cond_broadcast(&cond[req2]);
+                
+                pthread_mutex_unlock(&mutex[req1]);
+                // pthread_cond_broadcast(&cond[req2]);
+        } while (pthread_mutex_trylock(&fin));
+        
+        pthread_mutex_unlock(&fin);
         return NULL;
 }
 
@@ -94,15 +103,22 @@ int main(void)
                 { 3, 0 }
         };
 
+        /* Initializing conditions and mutexes */
+        pthread_mutex_init(&fin, NULL);
+        for(int i = 0; i < 4; i++) {
+                // pthread_cond_init(&cond[i], NULL);
+                pthread_mutex_init(&mutex[i], NULL);
+        }
+
         /* Start simulators (threads). */
+        pthread_mutex_lock(&fin);
         for (int i = 0; i < 4; i++) {
                 pthread_create(&lane[i], NULL, lane_fn, &req[i]);
-		pthread_mutex_init(&mutex[i], NULL);
         }
 
         /* Terminate simulation after three seconds. */
         sleep(3);
-        *done = true;
+        pthread_mutex_unlock(&fin);
 
         for (int i = 0; i < 4; i++) {
                 pthread_join(lane[i], NULL);
