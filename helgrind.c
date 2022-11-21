@@ -49,8 +49,14 @@ void* lane_fn(void *arg)
 
                 printf("Car %d entering intersection (%d)\n", id, req1);
 
-                pthread_mutex_lock(&mutex[req1]);
-                pthread_mutex_lock(&mutex[req2]);
+                /* Lowest Priority First Lock Ordering */
+                if(req1 < req2) {
+                        pthread_mutex_lock(&mutex[req1]);
+                        pthread_mutex_lock(&mutex[req2]);
+                } else {
+                        pthread_mutex_lock(&mutex[req2]);
+                        pthread_mutex_lock(&mutex[req1]);
+                }
 
                 printf("Car %d in intersection (%d and %d)\n", id, req1, req2);
 
@@ -76,14 +82,18 @@ void* lane_fn(void *arg)
                 intersection[req1] = 0;
                 intersection[req2] = 0;
 
-                pthread_mutex_unlock(&mutex[req2]);
-                // pthread_cond_broadcast(&cond[req2]);
-                
-                pthread_mutex_unlock(&mutex[req1]);
-                // pthread_cond_broadcast(&cond[req2]);
-        } while (pthread_mutex_trylock(&fin));
+                /* ensures unlock is consistent with lock ordering */
+                if(req1 < req2) {
+                        pthread_mutex_unlock(&mutex[req2]);
+                        pthread_mutex_unlock(&mutex[req1]);
+                } else {
+                        pthread_mutex_unlock(&mutex[req1]);
+                        pthread_mutex_unlock(&mutex[req2]);
+                }
+
+        } while (pthread_mutex_trylock(&fin)); // if the lock can be acquired, three seconds have passed
         
-        pthread_mutex_unlock(&fin);
+        pthread_mutex_unlock(&fin); // immediately unlock the lock for other threads to acquire
         return NULL;
 }
 
@@ -105,8 +115,7 @@ int main(void)
 
         /* Initializing conditions and mutexes */
         pthread_mutex_init(&fin, NULL);
-        for(int i = 0; i < 4; i++) {
-                // pthread_cond_init(&cond[i], NULL);
+        for (int i = 0; i < 4; i++) {
                 pthread_mutex_init(&mutex[i], NULL);
         }
 
@@ -118,12 +127,18 @@ int main(void)
 
         /* Terminate simulation after three seconds. */
         sleep(3);
+        /* unlocks fin mutex that tells lane_fn three seconds has passed */
         pthread_mutex_unlock(&fin);
 
         for (int i = 0; i < 4; i++) {
                 pthread_join(lane[i], NULL);
-		pthread_mutex_destroy(&mutex[i]);
         }
+
+        /* Destroy mutexes */
+        for (int i = 0; i < 4; i++) {
+                pthread_mutex_destroy(&mutex[i]);
+        }
+        pthread_mutex_destroy(&fin);
 
         return 0;
 }
