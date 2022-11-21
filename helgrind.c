@@ -28,7 +28,6 @@
 uint8_t intersection[4];
 pthread_mutex_t mutex[4];
 pthread_mutex_t fin;
-pthread_cond_t cond[4];
 
 bool *done;
 
