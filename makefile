@@ -1,5 +1,5 @@
 helgrind:
-	gcc helgrind.c -o helgrind
+	gcc helgrind.c -lpthread -o helgrind
 
 clean:
 	rm -rf helgrind
